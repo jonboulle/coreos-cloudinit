@@ -1,13 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
+	"path"
 
 	"github.com/coreos/coreos-cloudinit/datasource"
 	"github.com/coreos/coreos-cloudinit/initialize"
+	"github.com/coreos/coreos-cloudinit/network"
 	"github.com/coreos/coreos-cloudinit/system"
 )
 
@@ -37,6 +41,9 @@ func main() {
 	var useProcCmdline bool
 	flag.BoolVar(&useProcCmdline, "from-proc-cmdline", false, fmt.Sprintf("Parse %s for '%s=<url>', using the cloud-config served by an HTTP GET to <url>", datasource.ProcCmdlineLocation, datasource.ProcCmdlineCloudConfigFlag))
 
+	var convertNetconf string
+	flag.StringVar(&convertNetconf, "convert-netconf", "", "Read the network config provided in cloud-drive and translate it from the specified format into networkd unit files (requires the -from-configdrive flag)")
+
 	var workspace string
 	flag.StringVar(&workspace, "workspace", "/var/lib/coreos-cloudinit", "Base directory coreos-cloudinit should use to store data")
 
@@ -64,6 +71,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	if convertNetconf != "" && configdrive == "" {
+		fmt.Println("-convert-netconf flag requires the use of -from-configdrive")
+		os.Exit(1)
+	}
+
+	switch convertNetconf {
+	case "debian":
+	default:
+		fmt.Printf("Invalid option to -convert-netconf: '%s'. Supported options: 'debian'.", convertNetconf)
+		os.Exit(1)
+	}
+
 	log.Printf("Fetching user-data from datasource of type %q", ds.Type())
 	userdataBytes, err := ds.Fetch()
 	if err != nil {
@@ -85,6 +104,15 @@ func main() {
 		}
 	} else {
 		log.Printf("No user data to handle.")
+	}
+
+	if convertNetconf != "" {
+		if err := processNetconf(convertNetconf, configdrive); err != nil {
+			fmt.Printf("Failed to process network config: %v\n", err)
+			if !ignoreFailure {
+				os.Exit(1)
+			}
+		}
 	}
 }
 
@@ -116,4 +144,47 @@ func processUserdata(userdata string, env *initialize.Environment) error {
 	}
 
 	return err
+}
+
+func processNetconf(convertNetconf, configdrive string) error {
+	openstackRoot := path.Join(configdrive, "openstack")
+	metadataBytes, err := ioutil.ReadFile(path.Join(openstackRoot, "latest/meta_data.json"))
+	if err != nil {
+		return err
+	}
+
+	var metadata struct {
+		NetworkConfig struct {
+			ContentPath string `json:"content_path"`
+		} `json:"network_config"`
+	}
+	if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+		return err
+	}
+	configPath := metadata.NetworkConfig.ContentPath
+	if configPath == "" {
+		return nil
+	}
+
+	netconfBytes, err := ioutil.ReadFile(path.Join(openstackRoot, configPath))
+	if err != nil {
+		return err
+	}
+
+	var interfaces []network.InterfaceGenerator
+	switch convertNetconf {
+	case "debian":
+		interfaces, err = network.ProcessDebianNetconf(string(netconfBytes))
+	default:
+		panic(fmt.Sprintf("Unsupported network config format '%s'", convertNetconf))
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if err := system.WriteNetworkdConfigs(interfaces); err != nil {
+		return err
+	}
+	return system.RestartNetwork(interfaces)
 }
