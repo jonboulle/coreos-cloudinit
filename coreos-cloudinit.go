@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 
@@ -16,11 +15,6 @@ import (
 )
 
 const version = "0.7.1+git"
-
-func init() {
-	//Removes timestamp since it is displayed already during booting
-	log.SetFlags(0)
-}
 
 func main() {
 	var printVersion bool
@@ -79,14 +73,14 @@ func main() {
 	switch convertNetconf {
 	case "debian":
 	default:
-		fmt.Printf("Invalid option to -convert-netconf: '%s'. Supported options: 'debian'.", convertNetconf)
+		fmt.Printf("Invalid option to -convert-netconf: '%s'. Supported options: 'debian'\n", convertNetconf)
 		os.Exit(1)
 	}
 
-	log.Printf("Fetching user-data from datasource of type %q", ds.Type())
+	fmt.Printf("Fetching user-data from datasource of type %q\n", ds.Type())
 	userdataBytes, err := ds.Fetch()
 	if err != nil {
-		log.Printf("Failed fetching user-data from datasource: %v", err)
+		fmt.Printf("Failed fetching user-data from datasource: %v\n", err)
 		if ignoreFailure {
 			os.Exit(0)
 		} else {
@@ -97,13 +91,13 @@ func main() {
 	env := initialize.NewEnvironment("/", workspace)
 	if len(userdataBytes) > 0 {
 		if err := processUserdata(string(userdataBytes), env); err != nil {
-			log.Fatalf("Failed resolving user-data: %v", err)
+			fmt.Printf("Failed resolving user-data: %v\n", err)
 			if !ignoreFailure {
 				os.Exit(1)
 			}
 		}
 	} else {
-		log.Printf("No user data to handle.")
+		fmt.Println("No user data to handle.")
 	}
 
 	if convertNetconf != "" {
@@ -121,13 +115,14 @@ func processUserdata(userdata string, env *initialize.Environment) error {
 
 	parsed, err := initialize.ParseUserData(userdata)
 	if err != nil {
-		log.Printf("Failed parsing user-data: %v", err)
+		fmt.Printf("Failed parsing user-data: %v\n", err)
 		return err
 	}
 
 	err = initialize.PrepWorkspace(env.Workspace())
 	if err != nil {
-		log.Fatalf("Failed preparing workspace: %v", err)
+		fmt.Printf("Failed preparing workspace: %v\n", err)
+		return err
 	}
 
 	switch t := parsed.(type) {
