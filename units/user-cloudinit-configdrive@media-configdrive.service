@@ -3,7 +3,7 @@ Description=Load cloud-config from %f
 Requires=coreos-setup-environment.service
 After=coreos-setup-environment.service
 Before=user-config.target
-ConditionFileNotEmpty=%f
+ConditionDirectoryNotEmpty=%f
 
 # HACK: work around ordering between config drive and ec2 metadata It is
 # possible for OpenStack style systems to provide both the metadata service
@@ -21,4 +21,4 @@ After=ec2-cloudinit.service
 Type=oneshot
 RemainAfterExit=yes
 EnvironmentFile=-/etc/environment
-ExecStart=/usr/bin/coreos-cloudinit --from-file=%f
+ExecStart=/usr/bin/coreos-cloudinit --from-configdrive=%f -convert-netconf=debian
