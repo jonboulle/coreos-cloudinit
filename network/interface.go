@@ -8,9 +8,9 @@ import (
 
 type InterfaceGenerator interface {
 	Name() string
-	GenerateNetdevConfig() string
-	GenerateLinkConfig() string
-	GenerateNetworkConfig() string
+	Netdev() string
+	Link() string
+	Network() string
 }
 
 type logicalInterface struct {
@@ -27,15 +27,15 @@ func (p *physicalInterface) Name() string {
 	return p.name
 }
 
-func (p *physicalInterface) GenerateNetdevConfig() string {
+func (p *physicalInterface) Netdev() string {
 	return ""
 }
 
-func (p *physicalInterface) GenerateLinkConfig() string {
+func (p *physicalInterface) Link() string {
 	return ""
 }
 
-func (p *physicalInterface) GenerateNetworkConfig() string {
+func (p *physicalInterface) Network() string {
 	config := fmt.Sprintf("[Match]\nName=%s\n\n[Network]\n", p.name)
 
 	for _, child := range p.children {
@@ -59,15 +59,15 @@ func (b *bondInterface) Name() string {
 	return b.name
 }
 
-func (b *bondInterface) GenerateNetdevConfig() string {
+func (b *bondInterface) Netdev() string {
 	return fmt.Sprintf("[NetDev]\nKind=bond\nName=%s\n", b.name)
 }
 
-func (b *bondInterface) GenerateLinkConfig() string {
+func (b *bondInterface) Link() string {
 	return ""
 }
 
-func (b *bondInterface) GenerateNetworkConfig() string {
+func (b *bondInterface) Network() string {
 	config := fmt.Sprintf("[Match]\nName=%s\n\n[Network]\nDHCP=true\n", b.name)
 
 	for _, child := range b.children {
@@ -92,15 +92,15 @@ func (v *vlanInterface) Name() string {
 	return v.name
 }
 
-func (v *vlanInterface) GenerateNetdevConfig() string {
+func (v *vlanInterface) Netdev() string {
 	return fmt.Sprintf("[NetDev]\nKind=vlan\nName=%s\n\n[VLAN]\nId=%d\n", v.name, v.id)
 }
 
-func (v *vlanInterface) GenerateLinkConfig() string {
+func (v *vlanInterface) Link() string {
 	return ""
 }
 
-func (v *vlanInterface) GenerateNetworkConfig() string {
+func (v *vlanInterface) Network() string {
 	config := fmt.Sprintf("[Match]\nName=%s\n\n[Network]\n", v.name)
 	switch conf := v.config.(type) {
 	case configMethodStatic:
