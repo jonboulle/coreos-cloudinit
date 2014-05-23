@@ -8,6 +8,7 @@ import (
 	"path"
 
 	"github.com/coreos/coreos-cloudinit/network"
+	"github.com/coreos/coreos-cloudinit/third_party/github.com/dotcloud/docker/pkg/netlink"
 )
 
 const (
@@ -32,10 +33,10 @@ func RestartNetwork(interfaces []network.InterfaceGenerator) (err error) {
 }
 
 func downNetworkInterfaces(interfaces []network.InterfaceGenerator) error {
-	sysInterfaceMap := make(map[string]net.Interface)
+	sysInterfaceMap := make(map[string]*net.Interface)
 	if systemInterfaces, err := net.Interfaces(); err == nil {
 		for _, iface := range systemInterfaces {
-			sysInterfaceMap[iface.Name] = iface
+			sysInterfaceMap[iface.Name] = &iface
 		}
 	} else {
 		return err
@@ -43,8 +44,7 @@ func downNetworkInterfaces(interfaces []network.InterfaceGenerator) error {
 
 	for _, iface := range interfaces {
 		if systemInterface, ok := sysInterfaceMap[iface.Name()]; ok {
-			err := exec.Command("ip", "link", "set", systemInterface.Name, "down").Run()
-			if err != nil {
+			if err := netlink.NetworkLinkDown(systemInterface); err != nil {
 				fmt.Printf("Error while downing interface %q (%s). Continuing...\n", systemInterface.Name, err)
 			}
 		}
