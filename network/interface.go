@@ -16,7 +16,7 @@ type InterfaceGenerator interface {
 type logicalInterface struct {
 	name     string
 	config   configMethod
-	children []interface{}
+	children []InterfaceGenerator
 }
 
 type physicalInterface struct {
@@ -142,7 +142,7 @@ func buildInterfaces(stanzas []*stanzaInterface) []InterfaceGenerator {
 			logicalInterface{
 				name:     p.name,
 				config:   p.configMethod,
-				children: make([]interface{}, 0),
+				children: []InterfaceGenerator{},
 			},
 		}
 	}
@@ -157,7 +157,7 @@ func buildInterfaces(stanzas []*stanzaInterface) []InterfaceGenerator {
 			logicalInterface{
 				name:     b.name,
 				config:   b.configMethod,
-				children: make([]interface{}, 0),
+				children: []InterfaceGenerator{},
 			},
 			slaves,
 		}
@@ -174,7 +174,7 @@ func buildInterfaces(stanzas []*stanzaInterface) []InterfaceGenerator {
 			logicalInterface{
 				name:     v.name,
 				config:   v.configMethod,
-				children: make([]interface{}, 0),
+				children: []InterfaceGenerator{},
 			},
 			id,
 			rawDevice,
