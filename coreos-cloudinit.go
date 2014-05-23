@@ -171,7 +171,7 @@ func processNetconf(convertNetconf, configdrive string) error {
 	case "debian":
 		interfaces, err = network.ProcessDebianNetconf(string(netconfBytes))
 	default:
-		panic(fmt.Sprintf("Unsupported network config format '%s'", convertNetconf))
+		return fmt.Errorf("Unsupported network config format '%s'", convertNetconf)
 	}
 
 	if err != nil {
