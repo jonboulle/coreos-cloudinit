@@ -2,6 +2,7 @@ package network
 
 import (
 	"net"
+	"reflect"
 	"testing"
 )
 
@@ -202,6 +203,118 @@ Gateway=1.2.3.4
 `
 	if v.Network() != network {
 		t.Log(v.Network())
+		t.FailNow()
+	}
+}
+
+func TestBuildInterfacesLo(t *testing.T) {
+	stanzas := []*stanzaInterface{
+		&stanzaInterface{
+			name:         "lo",
+			kind:         interfacePhysical,
+			auto:         false,
+			configMethod: configMethodLoopback{},
+			options:      map[string][]string{},
+		},
+	}
+	interfaces := buildInterfaces(stanzas)
+	if len(interfaces) != 0 {
+		t.FailNow()
+	}
+}
+
+func TestBuildInterfaces(t *testing.T) {
+	stanzas := []*stanzaInterface{
+		&stanzaInterface{
+			name:         "eth0",
+			kind:         interfacePhysical,
+			auto:         false,
+			configMethod: configMethodManual{},
+			options:      map[string][]string{},
+		},
+		&stanzaInterface{
+			name:         "bond0",
+			kind:         interfaceBond,
+			auto:         false,
+			configMethod: configMethodManual{},
+			options: map[string][]string{
+				"slaves": []string{"eth0"},
+			},
+		},
+		&stanzaInterface{
+			name:         "bond1",
+			kind:         interfaceBond,
+			auto:         false,
+			configMethod: configMethodManual{},
+			options: map[string][]string{
+				"slaves": []string{"bond0"},
+			},
+		},
+		&stanzaInterface{
+			name:         "vlan0",
+			kind:         interfaceVLAN,
+			auto:         false,
+			configMethod: configMethodManual{},
+			options: map[string][]string{
+				"id":         []string{"0"},
+				"raw_device": []string{"eth0"},
+			},
+		},
+		&stanzaInterface{
+			name:         "vlan1",
+			kind:         interfaceVLAN,
+			auto:         false,
+			configMethod: configMethodManual{},
+			options: map[string][]string{
+				"id":         []string{"1"},
+				"raw_device": []string{"bond0"},
+			},
+		},
+	}
+	interfaces := buildInterfaces(stanzas)
+	vlan1 := &vlanInterface{
+		logicalInterface{
+			name:     "vlan1",
+			config:   configMethodManual{},
+			children: []InterfaceGenerator{},
+		},
+		1,
+		"bond0",
+	}
+	vlan0 := &vlanInterface{
+		logicalInterface{
+			name:     "vlan0",
+			config:   configMethodManual{},
+			children: []InterfaceGenerator{},
+		},
+		0,
+		"eth0",
+	}
+	bond1 := &bondInterface{
+		logicalInterface{
+			name:     "bond1",
+			config:   configMethodManual{},
+			children: []InterfaceGenerator{},
+		},
+		[]string{"bond0"},
+	}
+	bond0 := &bondInterface{
+		logicalInterface{
+			name:     "bond0",
+			config:   configMethodManual{},
+			children: []InterfaceGenerator{vlan1, bond1},
+		},
+		[]string{"eth0"},
+	}
+	eth0 := &physicalInterface{
+		logicalInterface{
+			name:     "eth0",
+			config:   configMethodManual{},
+			children: []InterfaceGenerator{vlan0, bond0},
+		},
+	}
+	expect := []InterfaceGenerator{eth0, bond0, bond1, vlan0, vlan1}
+	if !reflect.DeepEqual(interfaces, expect) {
 		t.FailNow()
 	}
 }
