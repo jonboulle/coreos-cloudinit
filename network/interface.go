@@ -190,8 +190,8 @@ func buildInterfaces(stanzas []*stanzaInterface) []InterfaceGenerator {
 			if physical, ok := physicals[slave]; ok {
 				physical.children = append(physical.children, bond)
 			}
-			if bond, ok := bonds[slave]; ok {
-				bond.children = append(bond.children, bond)
+			if pBond, ok := bonds[slave]; ok {
+				pBond.children = append(pBond.children, bond)
 			}
 		}
 	}
