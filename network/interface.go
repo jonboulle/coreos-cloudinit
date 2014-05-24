@@ -3,7 +3,6 @@ package network
 import (
 	"fmt"
 	"strconv"
-	"strings"
 )
 
 type InterfaceGenerator interface {
@@ -166,7 +165,7 @@ func buildInterfaces(stanzas []*stanzaInterface) []InterfaceGenerator {
 	vlans := make(map[string]*vlanInterface)
 	for _, v := range vlanStanzas {
 		var rawDevice string
-		id, _ := strconv.Atoi(strings.Split(v.name, ".")[1])
+		id, _ := strconv.Atoi(v.options["id"][0])
 		if device, ok := v.options["vlan_raw_device"]; ok && len(device) == 1 {
 			rawDevice = device[0]
 		}

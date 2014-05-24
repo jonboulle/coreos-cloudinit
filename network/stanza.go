@@ -3,8 +3,11 @@ package network
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 )
+
+type VLANNameError error
 
 type stanza interface{}
 
@@ -235,6 +238,10 @@ func parseInterfaceStanza(attributes []string, options []string) (*stanzaInterfa
 		conf = configMethodManual{}
 	}
 
+	if _, ok := optionMap["vlan_raw_device"]; ok {
+		return parseVLANStanza(iface, conf, attributes, optionMap)
+	}
+
 	if strings.Contains(iface, ".") {
 		return parseVLANStanza(iface, conf, attributes, optionMap)
 	}
@@ -255,5 +262,20 @@ func parsePhysicalStanza(iface string, conf configMethod, attributes []string, o
 }
 
 func parseVLANStanza(iface string, conf configMethod, attributes []string, options map[string][]string) (*stanzaInterface, error) {
+	var id string
+	if strings.Contains(iface, ".") {
+		tokens := strings.Split(iface, ".")
+		id = tokens[len(tokens)-1]
+	} else if strings.HasPrefix(iface, "vlan") {
+		id = strings.TrimPrefix(iface, "vlan")
+	} else {
+		return nil, VLANNameError(fmt.Errorf("malformed vlan name %s", iface))
+	}
+
+	if _, err := strconv.Atoi(id); err != nil {
+		return nil, VLANNameError(fmt.Errorf("malformed vlan name %s", iface))
+	}
+	options["id"] = []string{id}
+
 	return &stanzaInterface{name: iface, kind: interfaceVLAN, configMethod: conf, options: options}, nil
 }
