@@ -148,17 +148,13 @@ func buildInterfaces(stanzas []*stanzaInterface) []InterfaceGenerator {
 
 	bonds := make(map[string]*bondInterface)
 	for _, b := range bondStanzas {
-		var slaves []string
-		if s, ok := b.options["bond-slaves"]; ok {
-			slaves = s
-		}
 		bonds[b.name] = &bondInterface{
 			logicalInterface{
 				name:     b.name,
 				config:   b.configMethod,
 				children: []InterfaceGenerator{},
 			},
-			slaves,
+			b.options["slaves"],
 		}
 	}
 
@@ -166,7 +162,7 @@ func buildInterfaces(stanzas []*stanzaInterface) []InterfaceGenerator {
 	for _, v := range vlanStanzas {
 		var rawDevice string
 		id, _ := strconv.Atoi(v.options["id"][0])
-		if device, ok := v.options["vlan_raw_device"]; ok && len(device) == 1 {
+		if device := v.options["raw_device"]; len(device) == 1 {
 			rawDevice = device[0]
 		}
 		vlans[v.name] = &vlanInterface{

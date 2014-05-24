@@ -254,6 +254,7 @@ func parseInterfaceStanza(attributes []string, options []string) (*stanzaInterfa
 }
 
 func parseBondStanza(iface string, conf configMethod, attributes []string, options map[string][]string) (*stanzaInterface, error) {
+	options["slaves"] = options["bond-slaves"]
 	return &stanzaInterface{name: iface, kind: interfaceBond, configMethod: conf, options: options}, nil
 }
 
@@ -276,6 +277,7 @@ func parseVLANStanza(iface string, conf configMethod, attributes []string, optio
 		return nil, VLANNameError(fmt.Errorf("malformed vlan name %s", iface))
 	}
 	options["id"] = []string{id}
+	options["raw_device"] = options["vlan_raw_device"]
 
 	return &stanzaInterface{name: iface, kind: interfaceVLAN, configMethod: conf, options: options}, nil
 }
