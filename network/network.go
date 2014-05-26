@@ -5,10 +5,6 @@ import (
 )
 
 func ProcessDebianNetconf(config string) ([]InterfaceGenerator, error) {
-	return parseConfig(config)
-}
-
-func parseConfig(config string) ([]InterfaceGenerator, error) {
 	lines := formatConfig(config)
 	stanzas, err := parseStanzas(lines)
 	if err != nil {
