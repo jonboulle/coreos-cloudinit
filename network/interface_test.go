@@ -94,7 +94,8 @@ func TestBondInterfaceLink(t *testing.T) {
 func TestBondInterfaceNetwork(t *testing.T) {
 	b := bondInterface{
 		logicalInterface{
-			name: "testname",
+			name:   "testname",
+			config: configMethodDHCP{},
 			children: []InterfaceGenerator{
 				&bondInterface{
 					logicalInterface{
@@ -124,10 +125,10 @@ func TestBondInterfaceNetwork(t *testing.T) {
 Name=testname
 
 [Network]
-DHCP=true
 Bond=testbond1
 VLAN=testvlan1
 VLAN=testvlan2
+DHCP=true
 `
 	if b.Network() != network {
 		t.FailNow()

@@ -467,6 +467,16 @@ func TestParseInterfaceStanzaManual(t *testing.T) {
 	}
 }
 
+func TestParseInterfaceStanzaDHCP(t *testing.T) {
+	iface, err := parseInterfaceStanza([]string{"eth", "inet", "dhcp"}, nil)
+	if err != nil {
+		t.FailNow()
+	}
+	if _, ok := iface.configMethod.(configMethodDHCP); !ok {
+		t.FailNow()
+	}
+}
+
 func TestParseInterfaceStanzaPostUpOption(t *testing.T) {
 	options := []string{
 		"post-up",

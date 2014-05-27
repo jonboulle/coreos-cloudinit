@@ -18,6 +18,36 @@ type logicalInterface struct {
 	children []InterfaceGenerator
 }
 
+func (i *logicalInterface) Network() string {
+	config := fmt.Sprintf("[Match]\nName=%s\n\n[Network]\n", i.name)
+
+	for _, child := range i.children {
+		switch iface := child.(type) {
+		case *vlanInterface:
+			config += fmt.Sprintf("VLAN=%s\n", iface.name)
+		case *bondInterface:
+			config += fmt.Sprintf("Bond=%s\n", iface.name)
+		}
+	}
+
+	switch conf := i.config.(type) {
+	case configMethodStatic:
+		for _, nameserver := range conf.nameservers {
+			config += fmt.Sprintf("DNS=%s\n", nameserver)
+		}
+		if conf.address.IP != nil {
+			config += fmt.Sprintf("\n[Address]\nAddress=%s\n", conf.address.String())
+		}
+		for _, route := range conf.routes {
+			config += fmt.Sprintf("\n[Route]\nDestination=%s\nGateway=%s\n", route.destination.String(), route.gateway)
+		}
+	case configMethodDHCP:
+		config += "DHCP=true\n"
+	}
+
+	return config
+}
+
 type physicalInterface struct {
 	logicalInterface
 }
@@ -32,21 +62,6 @@ func (p *physicalInterface) Netdev() string {
 
 func (p *physicalInterface) Link() string {
 	return ""
-}
-
-func (p *physicalInterface) Network() string {
-	config := fmt.Sprintf("[Match]\nName=%s\n\n[Network]\n", p.name)
-
-	for _, child := range p.children {
-		switch iface := child.(type) {
-		case *vlanInterface:
-			config += fmt.Sprintf("VLAN=%s\n", iface.name)
-		case *bondInterface:
-			config += fmt.Sprintf("Bond=%s\n", iface.name)
-		}
-	}
-
-	return config
 }
 
 type bondInterface struct {
@@ -66,21 +81,6 @@ func (b *bondInterface) Link() string {
 	return ""
 }
 
-func (b *bondInterface) Network() string {
-	config := fmt.Sprintf("[Match]\nName=%s\n\n[Network]\nDHCP=true\n", b.name)
-
-	for _, child := range b.children {
-		switch iface := child.(type) {
-		case *vlanInterface:
-			config += fmt.Sprintf("VLAN=%s\n", iface.name)
-		case *bondInterface:
-			config += fmt.Sprintf("Bond=%s\n", iface.name)
-		}
-	}
-
-	return config
-}
-
 type vlanInterface struct {
 	logicalInterface
 	id        int
@@ -97,24 +97,6 @@ func (v *vlanInterface) Netdev() string {
 
 func (v *vlanInterface) Link() string {
 	return ""
-}
-
-func (v *vlanInterface) Network() string {
-	config := fmt.Sprintf("[Match]\nName=%s\n\n[Network]\n", v.name)
-	switch conf := v.config.(type) {
-	case configMethodStatic:
-		for _, nameserver := range conf.nameservers {
-			config += fmt.Sprintf("DNS=%s\n", nameserver)
-		}
-		if conf.address.IP != nil {
-			config += fmt.Sprintf("\n[Address]\nAddress=%s\n", conf.address.String())
-		}
-		for _, route := range conf.routes {
-			config += fmt.Sprintf("\n[Route]\nDestination=%s\nGateway=%s\n", route.destination.String(), route.gateway)
-		}
-	}
-
-	return config
 }
 
 func buildInterfaces(stanzas []*stanzaInterface) []InterfaceGenerator {

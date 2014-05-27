@@ -54,6 +54,8 @@ type configMethodLoopback struct{}
 
 type configMethodManual struct{}
 
+type configMethodDHCP struct{}
+
 func parseStanzas(lines []string) (stanzas []stanza, err error) {
 	rawStanzas, err := splitStanzas(lines)
 	if err != nil {
@@ -250,6 +252,8 @@ func parseInterfaceStanza(attributes []string, options []string) (*stanzaInterfa
 		conf = configMethodLoopback{}
 	case "manual":
 		conf = configMethodManual{}
+	case "dhcp":
+		conf = configMethodDHCP{}
 	default:
 		return nil, InterfaceInvalidConfigMethodError(fmt.Errorf("invalid config method '%s'", confMethod))
 	}
