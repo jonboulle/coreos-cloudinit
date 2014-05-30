@@ -4,74 +4,39 @@ import (
 	"testing"
 )
 
-func TestFormatConfigEmpty(t *testing.T) {
-	lines := formatConfig("")
-	if len(lines) != 0 {
-		t.FailNow()
-	}
-}
-
-func TestFormatConfigContinue(t *testing.T) {
-	lines := formatConfig("line 1\\\nis long")
-	if len(lines) != 1 {
-		t.FailNow()
-	}
-}
-
-func TestFormatConfigComment(t *testing.T) {
-	lines := formatConfig("#comment")
-	if len(lines) != 0 {
-		t.FailNow()
-	}
-}
-
-func TestFormatConfigCommentContinue(t *testing.T) {
-	lines := formatConfig("#comment\\\ncomment")
-	if len(lines) != 0 {
-		t.FailNow()
-	}
-}
-
-func TestFormatConfig(t *testing.T) {
-	lines := formatConfig("  #comment \\\n comment\nline 1\nline 2\\\n is long")
-	if len(lines) != 2 {
-		t.FailNow()
-	}
-}
-
-func TestProcessDebianNetconfNoConfig(t *testing.T) {
-	interfaces, err := ProcessDebianNetconf("")
-	if err != nil {
-		t.FailNow()
-	}
-	if len(interfaces) != 0 {
-		t.FailNow()
-	}
-}
-
-func TestProcessDebianNetconfInvalidStanza(t *testing.T) {
-	_, err := ProcessDebianNetconf("iface")
-	if err == nil {
-		t.FailNow()
-	}
-}
-
-func TestProcessDebianNetconfNoInterfaces(t *testing.T) {
-	interfaces, err := ProcessDebianNetconf("auto eth1\nauto eth2")
-	if err != nil {
-		t.FailNow()
-	}
-	if len(interfaces) != 0 {
-		t.FailNow()
+func TestFormatConfigs(t *testing.T) {
+	for in, n := range map[string]int{
+		"":                                                    0,
+		"line1\\\nis long":                                    1,
+		"#comment":                                            0,
+		"#comment\\\ncomment":                                 0,
+		"  #comment \\\n comment\nline 1\nline 2\\\n is long": 2,
+	} {
+		lines := formatConfig(in)
+		if len(lines) != n {
+			t.Fatalf("bad number of lines for config %q: got %d, want %d", in, len(lines), n)
+		}
 	}
 }
 
 func TestProcessDebianNetconf(t *testing.T) {
-	interfaces, err := ProcessDebianNetconf("iface eth1 inet manual")
-	if err != nil {
-		t.FailNow()
-	}
-	if len(interfaces) != 1 {
-		t.FailNow()
+	for _, tt := range []struct {
+		in   string
+		fail bool
+		n    int
+	}{
+		{"", false, 0},
+		{"iface", true, -1},
+		{"auto eth1\nauto eth2", false, 0},
+		{"iface eth1 inet manual", false, 1},
+	} {
+		interfaces, err := ProcessDebianNetconf(tt.in)
+		failed := err != nil
+		if tt.fail != failed {
+			t.Fatalf("bad failure state for %q: got %b, want %b", failed, tt.fail)
+		}
+		if tt.n != -1 && tt.n != len(interfaces) {
+			t.Fatalf("bad number of interfaces for %q: got %d, want %q", tt.in, len(interfaces), tt.n)
+		}
 	}
 }

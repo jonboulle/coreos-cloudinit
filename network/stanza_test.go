@@ -3,32 +3,70 @@ package network
 import (
 	"net"
 	"reflect"
+	"strings"
 	"testing"
 )
 
 func TestSplitStanzasNoParent(t *testing.T) {
-	lines := []string{"test"}
-	_, err := splitStanzas(lines)
-	if _, ok := err.(NoParentStanzaError); !ok {
-		t.FailNow()
+	in := []string{"test"}
+	e := "missing stanza start"
+	_, err := splitStanzas(in)
+	if err == nil || !strings.HasPrefix(err.Error(), e) {
+		t.Fatalf("bad error for splitStanzas(%q): got %q, want %q", in, err, e)
+	}
+}
+
+func TestBadParseStanzas(t *testing.T) {
+	for in, e := range map[string]string{
+		"":                 "missing stanza start",
+		"iface":            "malformed stanza start",
+		"allow-?? unknown": "unknown stanza",
+	} {
+		_, err := parseStanzas([]string{in})
+		if err == nil || !strings.HasPrefix(err.Error(), e) {
+			t.Fatalf("bad error for parseStanzas(%q): got %q, want %q", in, err, e)
+		}
+
+	}
+}
+
+func TestBadParseInterfaceStanza(t *testing.T) {
+	for _, tt := range []struct {
+		in   []string
+		opts []string
+		e    string
+	}{
+		{[]string{}, nil, "incorrect number of attributes"},
+		{[]string{"eth", "inet", "invalid"}, nil, "invalid config method"},
+		{[]string{"eth", "inet", "static"}, []string{"address 192.168.1.100"}, "malformed static network config"},
+		{[]string{"eth", "inet", "static"}, []string{"netmask 255.255.255.0"}, "malformed static network config"},
+		{[]string{"eth", "inet", "static"}, []string{"address invalid", "netmask 255.255.255.0"}, "malformed static network config"},
+		{[]string{"eth", "inet", "static"}, []string{"address 192.168.1.100", "netmask invalid"}, "malformed static network config"},
+	} {
+		_, err := parseInterfaceStanza(tt.in, tt.opts)
+		if err == nil || !strings.HasPrefix(err.Error(), tt.e) {
+			t.Fatalf("bad error parsing interface stanza %q: got %q, want %q", tt.in, err.Error(), tt.e)
+		}
+	}
+}
+
+func TestBadParseVLANStanzas(t *testing.T) {
+	conf := configMethodManual{}
+	options := map[string][]string{}
+	for _, in := range []string{"myvlan", "eth.vlan"} {
+		_, err := parseVLANStanza(in, conf, nil, options)
+		if err == nil || !strings.HasPrefix(err.Error(), "malformed vlan name") {
+			t.Fatalf("did not error on bad vlan %q", in)
+		}
 	}
 }
 
 func TestSplitStanzas(t *testing.T) {
 	expect := [][]string{
-		{
-			"auto lo",
-		},
-		{
-			"iface eth1",
-			"option: 1",
-		},
-		{
-			"mapping",
-		},
-		{
-			"allow-",
-		},
+		{"auto lo"},
+		{"iface eth1", "option: 1"},
+		{"mapping"},
+		{"allow-"},
 	}
 	lines := make([]string, 0, 5)
 	for _, stanza := range expect {
@@ -56,37 +94,20 @@ func TestSplitStanzas(t *testing.T) {
 func TestParseStanzaNil(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
-			t.FailNow()
+			t.Fatal("parseStanza(nil) did not panic")
 		}
 	}()
 	parseStanza(nil)
 }
 
-func TestParseStanzaMalformedStart(t *testing.T) {
-	_, err := parseStanza([]string{"iface"})
-	if _, ok := err.(MalformedStanzaStartError); !ok {
-		t.FailNow()
-	}
-}
-
-func TestParseStanzaAuto(t *testing.T) {
-	_, err := parseStanza([]string{"auto a"})
-	if err != nil {
-		t.FailNow()
-	}
-}
-
-func TestParseStanzaIface(t *testing.T) {
-	_, err := parseStanza([]string{"iface a inet manual"})
-	if err != nil {
-		t.FailNow()
-	}
-}
-
-func TestParseStanzaUnknownStanza(t *testing.T) {
-	_, err := parseStanza([]string{"allow-?? unknown"})
-	if _, ok := err.(UnknownStanzaError); !ok {
-		t.FailNow()
+func TestParseStanzaSuccess(t *testing.T) {
+	for _, in := range []string{
+		"auto a",
+		"iface a inet manual",
+	} {
+		if _, err := parseStanza([]string{in}); err != nil {
+			t.Fatalf("unexpected error parsing stanza %q: %s", in, err)
+		}
 	}
 }
 
@@ -94,7 +115,7 @@ func TestParseAutoStanza(t *testing.T) {
 	interfaces := []string{"test", "attribute"}
 	stanza, err := parseAutoStanza(interfaces, nil)
 	if err != nil {
-		t.FailNow()
+		t.Fatalf("unexpected error parsing auto stanza %q: %s", interfaces, err)
 	}
 	if !reflect.DeepEqual(stanza.interfaces, interfaces) {
 		t.FailNow()
@@ -158,75 +179,17 @@ func TestParsePhysicalStanza(t *testing.T) {
 	}
 }
 
-func TestParseVLANStanzaVLANName(t *testing.T) {
+func TestParseVLANStanzas(t *testing.T) {
 	conf := configMethodManual{}
 	options := map[string][]string{}
-	vlan, err := parseVLANStanza("vlan25", conf, nil, options)
-	if err != nil {
-		t.FailNow()
-	}
-	if !reflect.DeepEqual(vlan.options["id"], []string{"25"}) {
-		t.FailNow()
-	}
-}
-
-func TestParseVLANStanzaDotName(t *testing.T) {
-	conf := configMethodManual{}
-	options := map[string][]string{}
-	vlan, err := parseVLANStanza("eth.25", conf, nil, options)
-	if err != nil {
-		t.FailNow()
-	}
-	if !reflect.DeepEqual(vlan.options["id"], []string{"25"}) {
-		t.FailNow()
-	}
-}
-
-func TestParseVLANStanzaBadName(t *testing.T) {
-	conf := configMethodManual{}
-	options := map[string][]string{}
-	_, err := parseVLANStanza("myvlan", conf, nil, options)
-	if _, ok := err.(VLANNameError); !ok {
-		t.FailNow()
-	}
-}
-
-func TestParseVLANStanzaBadId(t *testing.T) {
-	conf := configMethodManual{}
-	options := map[string][]string{}
-	_, err := parseVLANStanza("eth.vlan", conf, nil, options)
-	if _, ok := err.(VLANNameError); !ok {
-		t.FailNow()
-	}
-}
-
-func TestParseInterfaceStanzaMissingAttribute(t *testing.T) {
-	_, err := parseInterfaceStanza([]string{}, nil)
-	if _, ok := err.(InterfaceMissingAttributesError); !ok {
-		t.FailNow()
-	}
-}
-
-func TestParseInterfaceStanzaInvalidConfigMethod(t *testing.T) {
-	_, err := parseInterfaceStanza([]string{"eth", "inet", "invalid"}, nil)
-	if _, ok := err.(InterfaceInvalidConfigMethodError); !ok {
-		t.FailNow()
-	}
-}
-
-func TestParseInterfaceStanzaStaticNoAddress(t *testing.T) {
-	options := []string{"address 192.168.1.100"}
-	_, err := parseInterfaceStanza([]string{"eth", "inet", "static"}, options)
-	if _, ok := err.(MalformedStaticNetworkError); !ok {
-		t.FailNow()
-	}
-}
-
-func TestParseInterfaceStanzaStaticNoNetmask(t *testing.T) {
-	options := []string{"netmask 255.255.255.0"}
-	_, err := parseInterfaceStanza([]string{"eth", "inet", "static"}, options)
-	if _, ok := err.(MalformedStaticNetworkError); !ok {
-		t.FailNow()
+	for _, in := range []string{"vlan25", "eth.25"} {
+		vlan, err := parseVLANStanza(in, conf, nil, options)
+		if err != nil {
+			t.Fatalf("unexpected error from parseVLANStanza(%q): %s", in, err)
+		}
+		if !reflect.DeepEqual(vlan.options["id"], []string{"25"}) {
+			t.FailNow()
+		}
 	}
 }
 
@@ -246,39 +209,6 @@ func TestParseInterfaceStanzaStaticAddress(t *testing.T) {
 		t.FailNow()
 	}
 	if !reflect.DeepEqual(static.address, expect) {
-		t.FailNow()
-	}
-}
-
-func TestParseInterfaceStanzaStaticInvalidAddress(t *testing.T) {
-	options := []string{"address invalid", "netmask 255.255.255.0"}
-
-	_, err := parseInterfaceStanza([]string{"eth", "inet", "static"}, options)
-	if _, ok := err.(MalformedStaticNetworkError); !ok {
-		t.FailNow()
-	}
-}
-
-func TestParseInterfaceStanzaStaticInvalidNetmask(t *testing.T) {
-	options := []string{"address 192.168.1.100", "netmask invalid"}
-
-	_, err := parseInterfaceStanza([]string{"eth", "inet", "static"}, options)
-	if _, ok := err.(MalformedStaticNetworkError); !ok {
-		t.FailNow()
-	}
-}
-
-func TestParseInterfaceStanzaStaticNoGateway(t *testing.T) {
-	options := []string{"address 192.168.1.100", "netmask 255.255.255.0", "gateway"}
-	iface, err := parseInterfaceStanza([]string{"eth", "inet", "static"}, options)
-	if err != nil {
-		t.FailNow()
-	}
-	static, ok := iface.configMethod.(configMethodStatic)
-	if !ok {
-		t.FailNow()
-	}
-	if len(static.routes) != 0 {
 		t.FailNow()
 	}
 }
@@ -308,21 +238,6 @@ func TestParseInterfaceStanzaStaticGateway(t *testing.T) {
 	}
 }
 
-func TestParseInterfaceStanzaStaticTwoGateways(t *testing.T) {
-	options := []string{"address 192.168.1.100", "netmask 255.255.255.0", "gateway 192.168.1.1 192.168.1.2"}
-	iface, err := parseInterfaceStanza([]string{"eth", "inet", "static"}, options)
-	if err != nil {
-		t.FailNow()
-	}
-	static, ok := iface.configMethod.(configMethodStatic)
-	if !ok {
-		t.FailNow()
-	}
-	if len(static.routes) != 0 {
-		t.FailNow()
-	}
-}
-
 func TestParseInterfaceStanzaStaticDNS(t *testing.T) {
 	options := []string{"address 192.168.1.100", "netmask 255.255.255.0", "dns-nameservers 192.168.1.10 192.168.1.11 192.168.1.12"}
 	expect := []net.IP{
@@ -343,78 +258,28 @@ func TestParseInterfaceStanzaStaticDNS(t *testing.T) {
 	}
 }
 
-func TestParseInterfaceStanzaStaticPostUpInvalid(t *testing.T) {
-	options := []string{"address 192.168.1.100", "netmask 255.255.255.0", "post-up invalid"}
-	iface, err := parseInterfaceStanza([]string{"eth", "inet", "static"}, options)
-	if err != nil {
-		t.FailNow()
-	}
-	static, ok := iface.configMethod.(configMethodStatic)
-	if !ok {
-		t.FailNow()
-	}
-	if len(static.routes) != 0 {
-		t.FailNow()
-	}
-}
-
-func TestParseInterfaceStanzaStaticPostUpEmpty(t *testing.T) {
-	options := []string{"address 192.168.1.100", "netmask 255.255.255.0", "post-up route add"}
-	iface, err := parseInterfaceStanza([]string{"eth", "inet", "static"}, options)
-	if err != nil {
-		t.FailNow()
-	}
-	static, ok := iface.configMethod.(configMethodStatic)
-	if !ok {
-		t.FailNow()
-	}
-	if len(static.routes) != 0 {
-		t.FailNow()
-	}
-}
-
-func TestParseInterfaceStanzaStaticPostUpBadNet(t *testing.T) {
-	options := []string{"address 192.168.1.100", "netmask 255.255.255.0", "post-up route add -net"}
-	iface, err := parseInterfaceStanza([]string{"eth", "inet", "static"}, options)
-	if err != nil {
-		t.FailNow()
-	}
-	static, ok := iface.configMethod.(configMethodStatic)
-	if !ok {
-		t.FailNow()
-	}
-	if len(static.routes) != 0 {
-		t.FailNow()
-	}
-}
-
-func TestParseInterfaceStanzaStaticPostUpBadGateway(t *testing.T) {
-	options := []string{"address 192.168.1.100", "netmask 255.255.255.0", "post-up route add gw"}
-	iface, err := parseInterfaceStanza([]string{"eth", "inet", "static"}, options)
-	if err != nil {
-		t.FailNow()
-	}
-	static, ok := iface.configMethod.(configMethodStatic)
-	if !ok {
-		t.FailNow()
-	}
-	if len(static.routes) != 0 {
-		t.FailNow()
-	}
-}
-
-func TestParseInterfaceStanzaStaticPostUpBadNetmask(t *testing.T) {
-	options := []string{"address 192.168.1.100", "netmask 255.255.255.0", "post-up route add netmask"}
-	iface, err := parseInterfaceStanza([]string{"eth", "inet", "static"}, options)
-	if err != nil {
-		t.FailNow()
-	}
-	static, ok := iface.configMethod.(configMethodStatic)
-	if !ok {
-		t.FailNow()
-	}
-	if len(static.routes) != 0 {
-		t.FailNow()
+func TestBadParseInterfaceStanzasStaticPostUp(t *testing.T) {
+	for _, in := range []string{
+		"post-up invalid",
+		"post-up route add",
+		"post-up route add -net",
+		"post-up route add gw",
+		"post-up route add netmask",
+		"gateway",
+		"gateway 192.168.1.1 192.168.1.2",
+	} {
+		options := []string{"address 192.168.1.100", "netmask 255.255.255.0", in}
+		iface, err := parseInterfaceStanza([]string{"eth", "inet", "static"}, options)
+		if err != nil {
+			t.Fatalf("parseInterfaceStanza with options %s got unexpected error", options)
+		}
+		static, ok := iface.configMethod.(configMethodStatic)
+		if !ok {
+			t.Fatalf("parseInterfaceStanza with options %s did not return configMethodStatic", options)
+		}
+		if len(static.routes) != 0 {
+			t.Fatalf("parseInterfaceStanza with options %s did not return zero-length static routes", options)
+		}
 	}
 }
 
@@ -574,24 +439,10 @@ func TestParseInterfaceStazaVLANOption(t *testing.T) {
 
 func TestParseStanzasNone(t *testing.T) {
 	stanzas, err := parseStanzas(nil)
-	if err != err {
+	if err != nil {
 		t.FailNow()
 	}
 	if len(stanzas) != 0 {
-		t.FailNow()
-	}
-}
-
-func TestParseStanzasBadSplit(t *testing.T) {
-	_, err := parseStanzas([]string{""})
-	if err == nil {
-		t.FailNow()
-	}
-}
-
-func TestParseStanzasBadInterface(t *testing.T) {
-	_, err := parseStanzas([]string{"iface"})
-	if err == nil {
 		t.FailNow()
 	}
 }

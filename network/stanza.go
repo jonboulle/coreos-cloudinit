@@ -7,14 +7,6 @@ import (
 	"strings"
 )
 
-type VLANNameError error
-type InterfaceMissingAttributesError error
-type InterfaceInvalidConfigMethodError error
-type NoParentStanzaError error
-type MalformedStanzaStartError error
-type UnknownStanzaError error
-type MalformedStaticNetworkError error
-
 type stanza interface{}
 
 type stanzaAuto struct {
@@ -104,7 +96,7 @@ func splitStanzas(lines []string) ([][]string, error) {
 		} else if curStanza != nil {
 			curStanza = append(curStanza, line)
 		} else {
-			return nil, NoParentStanzaError(fmt.Errorf("missing stanza start '%s'", line))
+			return nil, fmt.Errorf("missing stanza start '%s'", line)
 		}
 	}
 
@@ -138,7 +130,7 @@ func parseStanza(rawStanza []string) (stanza, error) {
 	}
 	tokens := strings.Fields(rawStanza[0])
 	if len(tokens) < 2 {
-		return nil, MalformedStanzaStartError(fmt.Errorf("malformed stanza start '%s'", rawStanza[0]))
+		return nil, fmt.Errorf("malformed stanza start %q", rawStanza[0])
 	}
 
 	kind := tokens[0]
@@ -150,7 +142,7 @@ func parseStanza(rawStanza []string) (stanza, error) {
 	case "iface":
 		return parseInterfaceStanza(attributes, rawStanza[1:])
 	default:
-		return nil, UnknownStanzaError(fmt.Errorf("unknown stanza '%s'", kind))
+		return nil, fmt.Errorf("unknown stanza '%s'", kind)
 	}
 }
 
@@ -160,7 +152,7 @@ func parseAutoStanza(attributes []string, options []string) (*stanzaAuto, error)
 
 func parseInterfaceStanza(attributes []string, options []string) (*stanzaInterface, error) {
 	if len(attributes) != 3 {
-		return nil, InterfaceMissingAttributesError(fmt.Errorf("incorrect number of attributes"))
+		return nil, fmt.Errorf("incorrect number of attributes")
 	}
 
 	iface := attributes[0]
@@ -212,7 +204,7 @@ func parseInterfaceStanza(attributes []string, options []string) (*stanzaInterfa
 			}
 		}
 		if config.address.IP == nil || config.address.Mask == nil {
-			return nil, MalformedStaticNetworkError(fmt.Errorf("malformed static network config for '%s'", iface))
+			return nil, fmt.Errorf("malformed static network config for '%s'", iface)
 		}
 		if gateways, ok := optionMap["gateway"]; ok {
 			if len(gateways) == 1 {
@@ -255,7 +247,7 @@ func parseInterfaceStanza(attributes []string, options []string) (*stanzaInterfa
 	case "dhcp":
 		conf = configMethodDHCP{}
 	default:
-		return nil, InterfaceInvalidConfigMethodError(fmt.Errorf("invalid config method '%s'", confMethod))
+		return nil, fmt.Errorf("invalid config method '%s'", confMethod)
 	}
 
 	if _, ok := optionMap["vlan_raw_device"]; ok {
@@ -290,11 +282,11 @@ func parseVLANStanza(iface string, conf configMethod, attributes []string, optio
 	} else if strings.HasPrefix(iface, "vlan") {
 		id = strings.TrimPrefix(iface, "vlan")
 	} else {
-		return nil, VLANNameError(fmt.Errorf("malformed vlan name %s", iface))
+		return nil, fmt.Errorf("malformed vlan name %s", iface)
 	}
 
 	if _, err := strconv.Atoi(id); err != nil {
-		return nil, VLANNameError(fmt.Errorf("malformed vlan name %s", iface))
+		return nil, fmt.Errorf("malformed vlan name %s", iface)
 	}
 	options["id"] = []string{id}
 	options["raw_device"] = options["vlan_raw_device"]
